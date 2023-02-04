@@ -29,8 +29,8 @@ String inputString = "";               // a string to hold incoming data
 String Tipo ="";
 String Signo ="";
 String Magnitud ="";
-String ACK ="ACK";
-String NACK ="NACK";
+String ACK ="ACK ABC";
+String NACK ="NACK ABC";
 bool DataReady = false;             // whether the string is complete
 bool error = false;                 // whether the string have errors
 
