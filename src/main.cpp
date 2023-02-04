@@ -23,7 +23,7 @@
 #define KVPlus 4
 #define KVMinus 5
 #define AEC_Analog A0
-
+#define XRay 13
 
 String inputString = "";               // a string to hold incoming data
 String Tipo ="";
@@ -36,15 +36,14 @@ bool error = false;                 // whether the string have errors
 
 unsigned char AEC_Limit_UP = 0;
 unsigned char AEC_Limit_DW = 0;
-unsigned char AEC_Limit_UP_Cine = 0;
-unsigned char AEC_Limit_DW_Cine = 0;
 unsigned char AEC_Analod_Read = 0;
-unsigned char PulseUP;
-unsigned char PulseDW;
+unsigned char PulseUP = 0;
+unsigned char PulseDW = 0;
+unsigned char AEC_Limit_In = 0;
 
 unsigned int count = 0;
-unsigned int XRayPeriod = 0;
-unsigned int XRayTime = 0;
+unsigned int XRayPeriod = 80;
+unsigned int XRayTime = 10;
 bool debugbool = false;
 bool Busy = false;
 
@@ -58,20 +57,31 @@ void setup() {
   inputString.reserve(20);
 
   pinMode(PulseIn, INPUT_PULLUP);
+  pinMode(PulseOut, OUTPUT);
   pinMode(AEC_Analog, INPUT);
   pinMode(KVPlus, OUTPUT);
   pinMode(KVMinus, OUTPUT);
-  pinMode(AEC_Analog, INPUT);
-  AEC_Limit_UP = 196;  // ReadEEPROM(0);
-  AEC_Limit_DW = 64;   // ReadEEPROM(1);
-  AEC_Limit_UP_Cine = ReadEEPROM(2);
-  AEC_Limit_DW_Cine = ReadEEPROM(3);
+  pinMode(XRay, OUTPUT);
+  AEC_Limit_UP = ReadEEPROM(0);
+  AEC_Limit_DW = ReadEEPROM(1);
+  XRayTime = ReadEEPROM(2);
   Timer2.EnableTimerInterrupt(Xray, 1000);                            // Interrupt every 1 milliseconds cuando hay que controlar los pulsos
+  Serial.println("ABC Control");
 }
 
 
 // ------------------ Interupt for Pulse Generation -----------------------------------------
 void Xray(void){
+  if (debugbool) {   // Generador de pulsos de Prueba solo en Debug
+    if (count == 0) {
+      digitalWrite (XRay, LOW);
+    }
+    count++;
+    if (count > 10 ) {
+      digitalWrite (XRay, HIGH);
+    }
+    if (count >= XRayPeriod) count = 0;
+  }
   if(PulseDW) {
     PulseDW -= 1;
     digitalWrite(KVMinus, HIGH);
@@ -84,10 +94,6 @@ void Xray(void){
 
 
 void loop() {
-  if (debugbool) {
-    // digitalWrite (T1, LOW);                   // Anula la restriccion de ABC en DEBUG para poder calibrar
-    AEC_Analod_Read = analogRead(AEC_Analog); // Lee el valor de ABC en DEBUG para poder calibrar
-  } 
   // Read the string when a newline arrives:
   if (DataReady) {
     Tipo = inputString.substring(0,1);
@@ -105,15 +111,39 @@ void loop() {
       goto jmp;
     }
 
+    if (Tipo == "I"){                   // Up / Down On Time in ms., valid values 1 - 999
+      if (Signo == "U"){
+        if ((1 <= Magnitud.toInt())&&( Magnitud.toInt() <= 999)){
+          XRayTime = Magnitud.toInt();
+          WriteEEPROM(2, XRayTime);
+          delay(50);
+          XRayTime = ReadEEPROM(2);
+        } else error = true;
+      }
+      goto jmp;
+    }
+
     if ((Tipo == "B")&&(debugbool)){    // Command for AEC Calibration
       if (Signo == "U"){
-        AEC_Limit_UP += Magnitud.toInt();
+        AEC_Limit_In += Magnitud.toInt();
       }
       if (Signo == "D"){
-        AEC_Limit_DW -= Magnitud.toInt();
+        AEC_Limit_In -= Magnitud.toInt();
       }
-      if (AEC_Limit_UP > 255) AEC_Limit_UP = 255;
-      if (AEC_Limit_DW < 0) AEC_Limit_DW = 0;
+      goto jmp;
+    }
+
+    if ((Tipo == "Z")&&(debugbool)){                   // Command to Write AEC Calibration
+      if (Signo == "U") {
+        WriteEEPROM(0, AEC_Limit_In);
+        delay(50);
+        AEC_Limit_UP = ReadEEPROM(0);
+      }
+      if (Signo == "D") {
+        WriteEEPROM(1, AEC_Limit_In);
+        delay(50);
+        AEC_Limit_DW = ReadEEPROM(1);
+      }
       goto jmp;
     }
 
@@ -122,14 +152,11 @@ void loop() {
       delay(50);
       WriteEEPROM(1, 64);
       delay(50);
-      WriteEEPROM(2, 196);
-      delay(50);
-      WriteEEPROM(3, 64);
+      WriteEEPROM(2, 40);
       delay(50);
       AEC_Limit_UP = ReadEEPROM(0);
       AEC_Limit_DW = ReadEEPROM(1);
-      AEC_Limit_UP_Cine = ReadEEPROM(2);
-      AEC_Limit_DW_Cine = ReadEEPROM(3);
+      XRayTime = ReadEEPROM(2);
       delay(500);
       software_Reset();
       goto jmp;
@@ -148,14 +175,38 @@ void loop() {
       Serial.print(Signo);
       Serial.print(" ,Magnitud: ");
       Serial.println(Magnitud);
+      Serial.print("IF Tipo: ");
+      Serial.println(0, DEC);
+      Serial.print("AEC Limit: ");
+      Serial.println(AEC_Limit_In, DEC);
       Serial.print("AEC Limit UP: ");
       Serial.println(AEC_Limit_UP, DEC);
       Serial.print("AEC Limit DW: ");
       Serial.println(AEC_Limit_DW, DEC);
       Serial.print("AEC Limit UP Cine: ");
-      Serial.println(AEC_Limit_UP_Cine, DEC);
+      Serial.println(0, DEC);
       Serial.print("AEC Limit DW Cine: ");
-      Serial.println(AEC_Limit_DW_Cine, DEC);
+      Serial.println(0, DEC);
+      Serial.print("AEC Lock Volt: ");
+      Serial.println(0, DEC);
+      Serial.print("T1 Limit Low(Subir): ");
+      Serial.println(0, DEC);
+      Serial.print("T0 Limit Hi(Bajar): ");
+      Serial.println(0, DEC);
+      Serial.print("Servo Iris: ");
+      Serial.println(0, DEC);
+      Serial.print("Servo Limit Up: ");
+      Serial.println(0, DEC);
+      Serial.print("Servo Limit Dn: ");
+      Serial.println(0, DEC);
+      Serial.print("Int Time: ");
+      Serial.println(XRayTime, DEC);
+      Serial.print("Period: ");
+      Serial.println(XRayPeriod, DEC);
+      Serial.print("Offset: ");
+      Serial.println(0, DEC);
+      Serial.print("Gain: ");
+      Serial.println(0, 2);
     }
 
     if (error) {
@@ -177,7 +228,7 @@ void loop() {
     //
   }
 
-  AEC_Analod_Read = analogRead(AEC_Analog); // Lee el valor de ABC en DEBUG para poder calibrar
+  AEC_Analod_Read = analogRead(AEC_Analog) / 4; // Lee el valor de ABC de entrada
   
   // --------- Detector de Pulsos de RX de Cine ------------------
   digitalWrite(PulseOut,!digitalRead(PulseIn)) ;
@@ -185,14 +236,13 @@ void loop() {
     Busy = false;
   }
 
-
   if (!digitalRead(PulseIn) && !Busy){
     if (AEC_Analod_Read > AEC_Limit_UP){
-      PulseDW = 10;
+      PulseDW = XRayTime;
       Busy = true;
     }
     if (AEC_Analod_Read < AEC_Limit_DW){
-      PulseUP = 10;
+      PulseUP = XRayTime;
       Busy = true;
     }
   }
