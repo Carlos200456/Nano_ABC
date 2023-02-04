@@ -39,11 +39,14 @@ unsigned char AEC_Limit_DW = 0;
 unsigned char AEC_Limit_UP_Cine = 0;
 unsigned char AEC_Limit_DW_Cine = 0;
 unsigned char AEC_Analod_Read = 0;
+unsigned char PulseUP;
+unsigned char PulseDW;
 
 unsigned int count = 0;
 unsigned int XRayPeriod = 0;
 unsigned int XRayTime = 0;
 bool debugbool = false;
+bool Busy = false;
 
 
 int eeAddress; //EEPROM address to start reading from
@@ -58,8 +61,9 @@ void setup() {
   pinMode(AEC_Analog, INPUT);
   pinMode(KVPlus, OUTPUT);
   pinMode(KVMinus, OUTPUT);
-  AEC_Limit_UP = ReadEEPROM(0);
-  AEC_Limit_DW = ReadEEPROM(1);
+  pinMode(AEC_Analog, INPUT);
+  AEC_Limit_UP = 196;  // ReadEEPROM(0);
+  AEC_Limit_DW = 64;   // ReadEEPROM(1);
   AEC_Limit_UP_Cine = ReadEEPROM(2);
   AEC_Limit_DW_Cine = ReadEEPROM(3);
   Timer2.EnableTimerInterrupt(Xray, 1000);                            // Interrupt every 1 milliseconds cuando hay que controlar los pulsos
@@ -68,8 +72,14 @@ void setup() {
 
 // ------------------ Interupt for Pulse Generation -----------------------------------------
 void Xray(void){
-  count++;
-  if (count == 5) AEC_Analod_Read = analogRead(AEC_Analog);     // Lee el Valor de AEC durante el Pulso
+  if(PulseDW) {
+    PulseDW -= 1;
+    digitalWrite(KVMinus, HIGH);
+  } else digitalWrite(KVMinus, LOW);
+  if(PulseUP) {
+    PulseUP -= 1;
+    digitalWrite(KVPlus, HIGH);
+  } else digitalWrite(KVPlus, LOW);
 }
 
 
@@ -167,10 +177,25 @@ void loop() {
     //
   }
 
+  AEC_Analod_Read = analogRead(AEC_Analog); // Lee el valor de ABC en DEBUG para poder calibrar
   
   // --------- Detector de Pulsos de RX de Cine ------------------
   digitalWrite(PulseOut,!digitalRead(PulseIn)) ;
-  
+  if(digitalRead(PulseIn)){
+    Busy = false;
+  }
+
+
+  if (!digitalRead(PulseIn) && !Busy){
+    if (AEC_Analod_Read > AEC_Limit_UP){
+      PulseDW = 10;
+      Busy = true;
+    }
+    if (AEC_Analod_Read < AEC_Limit_DW){
+      PulseUP = 10;
+      Busy = true;
+    }
+  }
   
 }   // -------------- End of main Loop ---------------------
 
