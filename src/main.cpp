@@ -22,6 +22,11 @@
 #define PulseOut 3
 #define KVPlus 4
 #define KVMinus 5
+#define SCIn 6
+#define CineIn 7
+#define SCOut 8
+#define SCReady 9
+#define CineReady 10
 #define AEC_Analog A0
 #define XRay 13
 
@@ -57,7 +62,12 @@ void setup() {
   inputString.reserve(20);
 
   pinMode(PulseIn, INPUT_PULLUP);
+  pinMode(SCIn, INPUT_PULLUP);
+  pinMode(CineIn, INPUT_PULLUP);
   pinMode(PulseOut, OUTPUT);
+  pinMode(SCOut, OUTPUT);
+  pinMode(SCReady, OUTPUT);
+  pinMode(CineReady, OUTPUT);
   pinMode(AEC_Analog, INPUT);
   pinMode(KVPlus, OUTPUT);
   pinMode(KVMinus, OUTPUT);
@@ -220,6 +230,23 @@ void loop() {
     inputString = "";
     DataReady = false;
   }
+
+
+ if (!digitalRead(SCIn)){
+   digitalWrite(SCOut, HIGH);
+   digitalWrite(SCReady, HIGH);
+  } else {
+    digitalWrite(SCReady, LOW);
+  }
+
+  if (!digitalRead(CineIn)){
+    digitalWrite(SCOut, HIGH);
+    digitalWrite(CineReady, HIGH);
+  } else {
+    digitalWrite(CineReady, LOW);
+  }
+
+ if (digitalRead(SCIn) && digitalRead(CineIn)) digitalWrite(SCOut, LOW);
 
 
   if (debugbool) {
